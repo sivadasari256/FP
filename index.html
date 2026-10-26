@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en" class="h-screen overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find My Case - FP</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#3b82f6', 600: '#2563eb' }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- SheetJS & Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        /* Custom scrollbars for clean UI */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        .dark ::-webkit-scrollbar-thumb { background: #334155; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .badge-gradient-blue { background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); }
+        .badge-gradient-purple { background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); }
+        .badge-gradient-emerald { background: linear-gradient(135deg, #34d399 0%, #059669 100%); }
+        .badge-gradient-amber { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); }
+        .badge-gradient-rose { background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans antialiased overflow-hidden">
+
+    <!-- Top Navigation Header -->
+    <header class="h-14 bg-slate-900 text-white border-b border-slate-800 px-6 flex items-center justify-between flex-none z-20">
+        <div class="flex items-center space-x-3">
+            <div class="p-2 bg-blue-600 rounded-lg text-white shadow">
+                <i data-lucide="layers" class="w-4 h-4"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm tracking-tight">Find My Case - FP</h1>
+                <p class="text-[10px] text-slate-400">Quick Finder</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-3">
+            <div id="metricsBar" class="hidden md:flex items-center space-x-2 bg-slate-800 border border-slate-700 rounded-lg px-3 py-1 text-xs">
+                <span class="text-slate-400">Cases:</span>
+                <strong id="statCases" class="text-blue-400 font-mono">0</strong>
+                <span class="text-slate-600">|</span>
+                <span class="text-slate-400">Steps:</span>
+                <strong id="statSteps" class="text-emerald-400 font-mono">0</strong>
+            </div>
+
+            <button id="clearCacheBtn" class="hidden bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition">
+                Reset Cache
+            </button>
+
+            <button id="themeToggle" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition border border-slate-700">
+                <i data-lucide="sun" class="w-3.5 h-3.5 hidden dark:block"></i>
+                <i data-lucide="moon" class="w-3.5 h-3.5 block dark:hidden"></i>
+            </button>
+
+            <label class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3.5 py-2 rounded-lg flex items-center space-x-1.5 transition shadow">
+                <i data-lucide="file-up" class="w-3.5 h-3.5"></i>
+                <span id="uploadBtnText">Import Excel</span>
+                <input type="file" id="excelFileInput" accept=".xlsx, .xls" class="hidden">
+            </label>
+        </div>
+    </header>
+
+    <!-- Main Workspace Container -->
+    <div class="flex-1 flex overflow-hidden min-h-0">
+
+        <!-- Column 1: Filters Sidebar -->
+        <aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col p-4 space-y-4 flex-none overflow-y-auto">
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Module</label>
+                    <button id="resetFilters" class="text-[10px] text-blue-600 dark:text-blue-400 font-semibold hover:underline hidden">Reset</button>
+                </div>
+                <select id="moduleFilter" class="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="">All Modules</option>
+                </select>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Channel</label>
+                <div id="channelFilters" class="flex flex-wrap gap-1 text-xs"></div>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Browser</label>
+                <select id="browserFilter" class="w-full text-xs bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <option value="">All Browsers</option>
+                </select>
+            </div>
+
+            <div class="mt-auto border-t border-slate-200 dark:border-slate-800 pt-3 space-y-1 text-xs text-slate-500">
+                <div class="flex justify-between">
+                    <span>Filtered Cases:</span>
+                    <strong id="filterCaseCount" class="text-slate-800 dark:text-slate-200 font-mono">0</strong>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Column 2: Test Case List (Strictly Bounded Scroll Box) -->
+        <section class="w-80 border-r border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 flex flex-col flex-none min-w-[280px] overflow-hidden">
+            <!-- Search Control (Fixed Header) -->
+            <div class="p-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 space-y-2.5 flex-none">
+                <div class="relative">
+                    <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400"></i>
+                    <input type="text" id="searchInput" placeholder="Instant search..." class="w-full pl-8 pr-7 py-1.5 text-xs border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-2 text-slate-400 hover:text-slate-600">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between text-[11px] text-slate-500">
+                    <span id="resultsCount">0 Items</span>
+                    <select id="sortSelect" class="bg-transparent font-semibold text-slate-700 dark:text-slate-300 cursor-pointer focus:outline-none">
+                        <option value="id-asc">TC ID ↑</option>
+                        <option value="id-desc">TC ID ↓</option>
+                        <option value="name">Name</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Scrollable List Container (flex-1 and min-h-0 enforces proper scroll context) -->
+            <div id="tcListContainer" class="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+                <div id="emptyState" class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                    <i data-lucide="file-spreadsheet" class="w-8 h-8 text-blue-500 mb-2"></i>
+                    <p class="font-bold text-slate-700 dark:text-slate-300 text-xs">No Test Cases Loaded</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Import your Excel file to begin.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Column 3: Inspector Panel (Scrollable Details View) -->
+        <main class="flex-1 bg-white dark:bg-slate-900 flex flex-col overflow-hidden min-h-0">
+            <div id="detailView" class="hidden flex-1 flex-col overflow-y-auto p-6 space-y-6 min-h-0">
+                <div class="border-b border-slate-200 dark:border-slate-800 pb-4 space-y-3 flex-none">
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1">
+                            <div class="flex items-center space-x-2">
+                                <span id="detailTcId" class="px-2.5 py-0.5 rounded font-mono font-bold text-xs text-white badge-gradient-blue">TC #1</span>
+                                <span id="detailModule" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Module</span>
+                            </div>
+                            <h2 id="detailTestName" class="text-lg font-bold text-slate-900 dark:text-slate-100">Test Title</h2>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span id="detailChannel" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-emerald-500/10 text-emerald-600">Web</span>
+                            <span id="detailBrowser" class="px-2.5 py-1 rounded text-[11px] font-semibold bg-blue-500/10 text-blue-600">Edge</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-xs space-y-1">
+                        <span class="text-[10px] font-bold text-blue-500 uppercase">Pre-conditions / Summary</span>
+                        <pre id="detailDescription" class="font-sans text-slate-700 dark:text-slate-300 whitespace-pre-wrap"></pre>
+                    </div>
+                </div>
+
+                <div class="space-y-3 flex-none">
+                    <div class="flex items-center justify-between">
+                        <h3 class="font-bold text-xs text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
+                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-emerald-500"></i>
+                            <span>Test Steps & Expected Results</span>
+                        </h3>
+                        <span id="detailStepCount" class="text-xs font-mono text-slate-500">0 Steps</span>
+                    </div>
+
+                    <div id="detailStepsContainer" class="space-y-2.5 pb-6"></div>
+                </div>
+            </div>
+
+            <div id="noDetailState" class="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center min-h-0">
+                <i data-lucide="mouse-pointer-click" class="w-8 h-8 mb-2 opacity-50"></i>
+                <p class="text-xs font-medium text-slate-600 dark:text-slate-400">Select a test case to inspect details</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        let rawData = [];
+        let testCasesMap = new Map();
+        let filteredData = [];
+        let selectedTcId = null;
+        let selectedChannels = new Set();
+
+        const COLOR_GRADIENTS = ['badge-gradient-blue', 'badge-gradient-purple', 'badge-gradient-emerald', 'badge-gradient-amber', 'badge-gradient-rose'];
+        function getModuleColorClass(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            return COLOR_GRADIENTS[Math.abs(hash) % COLOR_GRADIENTS.length];
+        }
+
+        // Theme Switcher
+        const themeToggleBtn = document.getElementById('themeToggle');
+        themeToggleBtn.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+        });
+        if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
+
+        // DOM Elements
+        const fileInput = document.getElementById('excelFileInput');
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearch');
+        const moduleFilter = document.getElementById('moduleFilter');
+        const browserFilter = document.getElementById('browserFilter');
+        const channelFiltersContainer = document.getElementById('channelFilters');
+        const sortSelect = document.getElementById('sortSelect');
+        const clearCacheBtn = document.getElementById('clearCacheBtn');
+        const tcListContainer = document.getElementById('tcListContainer');
+
+        // Restore from LocalStorage on Load
+        window.addEventListener('DOMContentLoaded', () => {
+            const cached = localStorage.getItem('test_suite_cache');
+            const filename = localStorage.getItem('test_suite_filename');
+            if (cached) {
+                try {
+                    processExcelData(JSON.parse(cached));
+                    if (filename) {
+                        document.getElementById('uploadBtnText').innerText = filename;
+                        clearCacheBtn.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    localStorage.removeItem('test_suite_cache');
+                }
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('uploadBtnText').innerText = "Loading...";
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+                    localStorage.setItem('test_suite_cache', JSON.stringify(json));
+                    localStorage.setItem('test_suite_filename', file.name);
+
+                    processExcelData(json);
+                    document.getElementById('uploadBtnText').innerText = file.name;
+                    clearCacheBtn.classList.remove('hidden');
+                } catch (err) {
+                    alert("Error parsing excel file.");
+                    document.getElementById('uploadBtnText').innerText = "Import Excel";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        clearCacheBtn.addEventListener('click', () => {
+            if (confirm("Clear cache?")) {
+                localStorage.removeItem('test_suite_cache');
+                localStorage.removeItem('test_suite_filename');
+                window.location.reload();
+            }
+        });
+
+        function processExcelData(jsonRows) {
+            testCasesMap.clear();
+            jsonRows.forEach(row => {
+                const tcId = String(row['TC#'] || row['TC'] || '').trim();
+                if (!tcId) return;
+
+                const testName = String(row['Test Name'] || '').trim();
+                const description = String(row['Description'] || '').trim();
+                const stepName = String(row['Step Name (Design Steps)'] || '').trim();
+                const stepDesc = String(row['Description (Design Steps)'] || '').trim();
+                const expectedResult = String(row['Expected Result (Design Steps)'] || '').trim();
+                const module = String(row['Module'] || 'General').trim();
+                const channel = String(row['Channel'] || 'N/A').trim();
+                
+                let browserKey = Object.keys(row).find(k => k.toLowerCase().includes('browser')) || 'Browser';
+                const browser = String(row[browserKey] || 'N/A').trim();
+
+                if (!testCasesMap.has(tcId)) {
+                    testCasesMap.set(tcId, {
+                        tc_id: tcId,
+                        test_name: testName,
+                        description: description,
+                        module: module,
+                        channel: channel,
+                        browser: browser,
+                        steps: []
+                    });
+                }
+
+                if (stepName || stepDesc || expectedResult) {
+                    testCasesMap.get(tcId).steps.push({
+                        step_name: stepName,
+                        step_desc: stepDesc,
+                        expected_result: expectedResult
+                    });
+                }
+            });
+
+            rawData = Array.from(testCasesMap.values());
+            buildFilters();
+            applyFiltersAndSort();
+            updateStats();
+        }
+
+        function buildFilters() {
+            const modules = new Set(), browsers = new Set(), channels = new Set();
+            rawData.forEach(tc => {
+                if (tc.module) modules.add(tc.module);
+                if (tc.browser) browsers.add(tc.browser);
+                if (tc.channel) channels.add(tc.channel);
+            });
+
+            moduleFilter.innerHTML = '<option value="">All Modules</option>' + 
+                Array.from(modules).sort().map(m => `<option value="${m}">${m}</option>`).join('');
+
+            browserFilter.innerHTML = '<option value="">All Browsers</option>' + 
+                Array.from(browsers).sort().map(b => `<option value="${b}">${b}</option>`).join('');
+
+            channelFiltersContainer.innerHTML = Array.from(channels).sort().map(c => `
+                <button onclick="toggleChannel(this, '${c}')" class="px-2 py-0.5 rounded border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-500 font-medium transition">${c}</button>
+            `).join('');
+        }
+
+        window.toggleChannel = function(btn, ch) {
+            if (selectedChannels.has(ch)) {
+                selectedChannels.delete(ch);
+                btn.classList.remove('bg-blue-600', 'text-white', 'border-blue-600');
+            } else {
+                selectedChannels.add(ch);
+                btn.classList.add('bg-blue-600', 'text-white', 'border-blue-600');
+            }
+            applyFiltersAndSort();
+        };
+
+        function applyFiltersAndSort() {
+            const query = searchInput.value.toLowerCase().trim();
+            const mod = moduleFilter.value;
+            const brow = browserFilter.value;
+
+            filteredData = rawData.filter(tc => {
+                if (mod && tc.module !== mod) return false;
+                if (brow && tc.browser !== brow) return false;
+                if (selectedChannels.size > 0 && !selectedChannels.has(tc.channel)) return false;
+
+                if (query) {
+                    const matchId = tc.tc_id.toLowerCase().includes(query);
+                    const matchName = tc.test_name.toLowerCase().includes(query);
+                    const matchDesc = tc.description.toLowerCase().includes(query);
+                    const matchSteps = tc.steps.some(s => 
+                        s.step_name.toLowerCase().includes(query) ||
+                        s.step_desc.toLowerCase().includes(query) ||
+                        s.expected_result.toLowerCase().includes(query)
+                    );
+                    if (!matchId && !matchName && !matchDesc && !matchSteps) return false;
+                }
+                return true;
+            });
+
+            const sortVal = sortSelect.value;
+            filteredData.sort((a, b) => {
+                if (sortVal === 'id-asc') return parseInt(a.tc_id) - parseInt(b.tc_id);
+                if (sortVal === 'id-desc') return parseInt(b.tc_id) - parseInt(a.tc_id);
+                if (sortVal === 'name') return a.test_name.localeCompare(b.test_name);
+                return 0;
+            });
+
+            document.getElementById('resultsCount').innerText = `${filteredData.length} Items`;
+            document.getElementById('filterCaseCount').innerText = filteredData.length;
+
+            renderList();
+        }
+
+        function renderList() {
+            if (filteredData.length === 0) {
+                tcListContainer.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-center p-6 text-slate-400">
+                        <i data-lucide="search-x" class="w-8 h-8 opacity-50 mb-2"></i>
+                        <p class="font-bold text-slate-700 dark:text-slate-300 text-xs">No matching test cases found</p>
+                    </div>`;
+                lucide.createIcons();
+                return;
+            }
+
+            tcListContainer.innerHTML = filteredData.map(tc => {
+                const isSelected = selectedTcId === tc.tc_id;
+                const moduleColor = getModuleColorClass(tc.module);
+
+                return `
+                    <div onclick="selectTestCase('${tc.tc_id}')" class="p-3 rounded-lg border transition cursor-pointer ${
+                        isSelected 
+                        ? 'bg-blue-50/90 dark:bg-slate-900 border-blue-500 shadow-md ring-1 ring-blue-500/20' 
+                        : 'bg-white/80 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                    }">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-[10px] font-bold font-mono text-white px-1.5 py-0.5 rounded ${moduleColor}">TC #${tc.tc_id}</span>
+                            <span class="text-[10px] text-slate-400 truncate max-w-[110px]">${tc.module}</span>
+                        </div>
+                        <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1">${tc.test_name}</h4>
+                        <div class="flex items-center justify-between mt-2 text-[10px] text-slate-400">
+                            <span class="font-semibold text-slate-600 dark:text-slate-400">${tc.steps.length} Steps</span>
+                            <span>${tc.channel}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        window.selectTestCase = function(tcId) {
+            selectedTcId = tcId;
+            const tc = testCasesMap.get(tcId);
+            if (!tc) return;
+
+            renderList();
+
+            document.getElementById('noDetailState').classList.add('hidden');
+            const detailView = document.getElementById('detailView');
+            detailView.classList.remove('hidden');
+            detailView.classList.add('flex');
+
+            document.getElementById('detailTcId').innerText = `TC #${tc.tc_id}`;
+            document.getElementById('detailModule').innerText = tc.module;
+            document.getElementById('detailTestName').innerText = tc.test_name;
+            document.getElementById('detailChannel').innerText = tc.channel || 'N/A';
+            document.getElementById('detailBrowser').innerText = tc.browser || 'N/A';
+            document.getElementById('detailDescription').innerText = tc.description || 'No description provided.';
+            document.getElementById('detailStepCount').innerText = `${tc.steps.length} Steps Total`;
+
+            document.getElementById('detailStepsContainer').innerHTML = tc.steps.map((step, idx) => `
+                <div class="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/80 rounded-lg p-3 space-y-2">
+                    <span class="text-[11px] font-bold text-blue-600 dark:text-blue-400 font-mono">${step.step_name || 'Step ' + (idx + 1)}</span>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 uppercase">Action</span>
+                            <pre class="font-sans text-slate-700 dark:text-slate-300 whitespace-pre-wrap mt-0.5">${step.step_desc || '-'}</pre>
+                        </div>
+                        <div class="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded p-2">
+                            <span class="text-[10px] font-bold text-emerald-600 uppercase">Expected</span>
+                            <pre class="font-sans text-emerald-900 dark:text-emerald-300 whitespace-pre-wrap mt-0.5">${step.expected_result || '-'}</pre>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            lucide.createIcons();
+        };
+
+        function updateStats() {
+            document.getElementById('statCases').innerText = rawData.length;
+            document.getElementById('statSteps').innerText = rawData.reduce((acc, c) => acc + c.steps.length, 0);
+            document.getElementById('metricsBar').classList.remove('hidden');
+        }
+
+        searchInput.addEventListener('input', (e) => {
+            clearSearchBtn.classList.toggle('hidden', !e.target.value);
+            applyFiltersAndSort();
+        });
+
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearchBtn.classList.add('hidden');
+            applyFiltersAndSort();
+        });
+
+        moduleFilter.addEventListener('change', applyFiltersAndSort);
+        browserFilter.addEventListener('change', applyFiltersAndSort);
+        sortSelect.addEventListener('change', applyFiltersAndSort);
+    </script>
+</body>
+</html>
